@@ -1,0 +1,175 @@
+---
+title: "FinalProject"
+output: html_document
+---
+
+```{r}
+library(tidyverse)
+library(broom)
+library(scales)
+library(lubridate)
+library(maps)
+library(stringr)
+library(stringi)
+
+google_store <- read_csv("google_store.csv")
+```
+
+
+```{r}
+google_store$date <- ymd(google_store$table_date)
+
+google_store <- google_store %>% 
+  mutate(purchase = is.na(revenue) %>% ifelse(0, 1))
+```
+
+```{r}
+google_store$bounces <- replace_na(google_store$bounces, 0)
+
+google_store$revenue <- replace_na(google_store$revenue, 0)
+
+google_store$total_time_on_site <-replace_na(google_store$total_time_on_site, 0)
+
+google_store$transactions <-replace_na(google_store$transactions, 0)
+
+google_store$session_quality <-replace_na(
+  google_store$session_quality, 
+  mean(google_store$session_quality, na.rm = TRUE)
+)
+
+which(colSums(is.na(google_store)) > 0)
+
+google_store
+```
+
+```{r}
+google_store$bounces %>% unique()
+```
+
+
+```{r}
+daily_stats <- google_store %>%
+  group_by(date) %>%
+  summarize(
+    total_revenue = sum(revenue, na.rm=TRUE),
+    average_revenue = mean(revenue, na.rm = TRUE),
+    bounce_rate = mean(bounces, na.rm = TRUE),
+    total_visits = n()
+    )
+daily_stats
+```
+```{r}
+p1 <- ggplot(daily_stats, aes(x=date, y=total_revenue)) + 
+  geom_line() + 
+  scale_y_continuous(labels = dollar_format()) +  
+  labs(
+    x = "Date",
+    y = "Total Revenue",
+    title = "Google Store Daily Total Revenue"
+  )
+p1
+
+p2 <- ggplot(daily_stats, aes(x=date, y=average_revenue)) + 
+  geom_line() + 
+  scale_y_continuous(labels = dollar_format()) +  
+  labs(
+    x = "Date",
+    y = "Total Revenue",
+    title = "Google Store Daily Average Revenue per Visit"
+  )
+p2
+```
+
+
+```{r}
+# 1. Histogram of Revenue
+ggplot(
+  google_store %>% filter(revenue < 700 & revenue > 0.1), 
+  aes(x = revenue)) +
+  geom_histogram(bins = 100, fill = "steelblue", color = "white") +
+  
+  scale_x_continuous(labels = dollar_format()) +
+  labs(
+    title = "Distribution of Session Revenue by Purchase",
+    x = "Revenue (USD)",
+    y = "Number of Sessions"
+  ) +
+  theme_minimal()
+
+```
+
+```{r}
+
+google_store %>%
+  count(traffic_source, sort = TRUE) %>%
+  slice_head(n = 10) %>%
+  ggplot(aes(x = reorder(traffic_source, n), y = n)) +
+    geom_bar(stat = "identity", fill = "skyblue") +
+    coord_flip() +
+    scale_y_continuous(labels = comma) +
+    labs(
+      title = "Top 10 Traffic Sources by Session Count",
+      x = "Traffic Source",
+      y = "Number of Sessions"
+    ) +
+    theme_minimal()
+```
+```{r}
+youtube_vs_search <- google_store %>%
+  filter(traffic_source %in% c("google", "youtube.com"))
+
+bounce_comparison <- table(youtube_vs_search$traffic_source, youtube_vs_search$bounces)
+bounce_comparison
+
+prop.table(bounce_comparison, margin=1)
+
+chi_sq_test <- chisq.test(bounce_comparison)
+chi_sq_test
+```
+
+- Youtube searches have a much higher bounce rate compared to google. Redirects from youtube are likely generally targeted advertisements or product placements, whereas likely organic google searches are more likely to be going out of their way looking for a product.
+
+```{r}
+google_store %>% 
+  filter(revenue < 10000,
+         total_pageviews > 0,
+         revenue > 0) %>%
+  ggplot(aes(x = total_pageviews, y = revenue)) +
+  geom_point(alpha = 0.4, color = "blue") +
+  geom_smooth(method = 'lm') +
+  scale_y_continuous(labels = scales::dollar_format(prefix = "$")) +
+  labs(
+    title = "Total Pageviews vs. Revenue",
+    x = "Total Pageviews",
+    y = "Revenue (USD)"
+  ) +
+  theme_minimal()
+
+```
+```{r}
+model <- lm(log10(revenue) ~ total_pageviews, data=google_store)
+model_info <- tidy(model)
+10^model_info$estimate
+
+new_data <- data.frame(total_pageviews = c(1, 5, 10, 20))
+predictions <- predict(model, newdata = new_data)
+
+predicted_revenue <- 10^predictions
+predicted_revenue
+```
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
