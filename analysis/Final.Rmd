@@ -1,10 +1,19 @@
 ---
 title: "Logistic Regression Final"
+author: "Eli Andrae, "
 output: html_document
 editor_options: 
   markdown: 
     wrap: 72
 ---
+
+# 1. Execuative Summary
+
+Write Here:
+
+# 2. Setup
+
+## Load Required Libraries
 
 ```{r}
 library(tidyverse)
@@ -12,13 +21,20 @@ library(broom)
 library(scales)
 library(lubridate)
 library(ggplot2)
-library(rlang)
+```
 
-google_store <- read_csv("data/google_store.csv")
-daily_stats <- read_csv("data/daily_stats.csv")
+## Load Data
+
+```{r}
+google_store <- read_csv("../data/google_store.csv")
+daily_stats <- read_csv("../data/daily_stats.csv")
 ```
 
 First I will clear the NA values to make the data usable in a Regression
+
+# Data Cleaning & Feature Engineering
+
+-   Cleaning our NA Values and Creating The Purchase Variable
 
 ```{r}
 google_store <- google_store %>% 
@@ -28,17 +44,21 @@ google_store <- google_store %>%
     revenue = replace_na(revenue, 0),
     total_time_on_site = replace_na(total_time_on_site, 0),
     transactions = replace_na(transactions, 0),
-    session_quality = replace_na(session_quality, 50)
+    session_quality = replace_na(session_quality, 50),
+    user_country = replace_na(user_country, "Not Observed")
   )
 which(colSums(is.na(google_store)) > 0)
 ```
 
-Now we will add some extra features to the data. Due to compute times some of
-these have been excluded from the file and presaved as a CSV file.
-Not every country and holiday is included, however, I tried my
+## Feature Engineering Using Date Functions
+
+Now we will add some extra features to the data. Due to compute times
+some of these have been excluded from the file and presaved as a CSV
+file. Not every country and holiday is included, however, I tried my
 best to include as many as possible using [date.nager
 API](https://date.nager.at/api/v3/publicholidays/). View
-`HolidayAnalysis.Rmd` for more info on how the holidays were accessed and `days_till_holiday` was calculated.**
+`HolidayAnalysis.Rmd` for more info on how the holidays were accessed
+and `days_till_holiday` was calculated.\*\*
 
 ```{r}
 # Modification Using Lubridate
@@ -50,6 +70,15 @@ google_store <- google_store %>%
     month = month(date, label = TRUE, abbr = TRUE)
   )
 
+google_store$month <- factor(google_store$month, 
+                             levels = c("Jan", "Feb", "Mar", "Apr", "May", "Jun", 
+                                        "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"), 
+                             ordered = FALSE)
+```
+
+## Merging Holiday Data and Visior Data
+
+```{r}
 # Joining with a dataset of holidays and days until the next holiday
 google_store <- left_join(
   google_store, 
@@ -65,8 +94,6 @@ google_store <- google_store %>%
   right_join(google_store, 'fullVisitorId')
 ```
 
-
-
 # Finding Optimal Pre-Holiday Marketing Period
 
 I'm thinking there might be an optimal period to market before holidays.
@@ -77,6 +104,8 @@ holiday_group <- daily_stats %>%
   summarize(total_sales_before_holiday = sum(total_sales)) %>%
   arrange(desc(total_sales_before_holiday)) %>%
   na.omit()
+
+arrange(holiday_group, desc(total_sales_before_holiday))
 ```
 
 The most common days to place an order before a holiday are 7, 6, and 4
@@ -93,17 +122,29 @@ holiday_plot <- ggplot(holiday_group, aes(x=days_till_holiday, y=total_sales_bef
         x='Days Till Holiday',
         y='Total Sales'
     ) +
-    theme_minimal()
+    theme_bw()
 holiday_plot
 ```
 
-- Just as I suspected, as it gets closer to a holiday, sales go up around the world. 
-- In order to handle this in the logistic regression model, I will apply an inverse transformation. This is because as the number of days gets close to zero generally the odds become higher. With coefficients used in regressions, we need 
+-   Just as I suspected, as it gets closer to a holiday, sales go up
+    around the world.
+-   In order to handle this in the logistic regression model, we
+    attempted an inverse transformation but yeilded minimal results. We
+    found the more effective method for the model was to find total
+    country sales for each number of days before the holiday. The number
+    of sales for that day can then be used as a weight in the logistic
+    regression model.
 
 ```{r}
 google_store <- google_store %>%
-  left_join(holiday_group, "days_till_holiday")
+  left_join(holiday_group, "days_till_holiday") 
 google_store
+```
+
+# Looking at Linear Correlation
+
+```{r}
+summary(google_store)
 ```
 
 # Defining Logestic Regression model
@@ -126,7 +167,14 @@ logistic_regression <- function(
     numeric_features = NA, 
     categorical_features, 
     theta = 0.5){
+  
+  df <- df %>% 
+    filter(traffic_source != "analytics.google.com")
+  
+  # Make sure there's no columns with straggling NA values.
   df = na.omit(df)
+  # Custom filter list
+  df <- df %>% filter()
   # First I need to take an aggressive approach to cleaning the data to avoid 
   # mismatches. For this model I will only consider the top n most common 
   # features in order to adjust speed and accuracy.
@@ -205,12 +253,16 @@ logistic_regression <- function(
 
 ```{r}
 categorical_features <- c(
-  "traffic_source", "traffic_medium", "month", 
-  "operating_system", "user_country", "browser")
+  "traffic_source", "traffic_medium", 
+  "operating_system", "browser", "user_country")
 
 numeric_features <- c(
   "total_time_on_site", "total_pageviews", "previous_visit_count", 
-  "previous_purchase_count", "is_weekend", "total_sales_before_holiday")
+  "previous_purchase_count", "total_sales_before_holiday")
+
+
+feature_1 <- 
+filter_features <- 
 
 purchase_reg <- logistic_regression(
   df = google_store,
@@ -223,35 +275,36 @@ purchase_reg <- logistic_regression(
 
 
 ```
-Purchase Model Results:
-- Ended up with extremely high accuracy and TN rate. Theta can be adjusted in small increments(+-0.01) to increase TP or NT rate.
-- I attempted a ridge regression model. I was able to avoid 0 or 1 probability error, however, I lost the modularity of the model. Did not have time to improve upon.
+
+Purchase Model Results: - Ended up with extremely high accuracy and TN
+rate. Theta can be adjusted in small increments(+-0.01) to increase TP
+or NT rate. - I attempted a ridge regression model. I was able to avoid
+0 or 1 probability error, however, I lost the modularity of the model.
+Did not have time to improve upon.
+
 ```{r}
+
 purchase_model <- purchase_reg[[1]]
 
-#ggstats::ggcoef_model(purchase_model,
-#                      exponentiate = TRUE,
-#                      ci_method="wald")+
-ggstatsplot::ggcoefstats(
-  x = purchase_model,
-  exponentiate = TRUE,
-  conf.level = 0.95
-)+
-  theme_classic(base_size = 5) 
-  #scale_x_continuous(limits = c(0, 2))
+purchase_plot <- ggstats::ggcoef_model(purchase_model,
+                      exponentiate = TRUE)+
+  theme_classic(base_size = 6) + 
+  scale_x_continuous(
+    labels = scales::number_format(accuracy = 1)
+) +
+  labs(
+    title = "Coeficient Plot for Odds of Purchase Logistic Regression")
+
+ggsave("purchase_model_plot.png",
+       plot = last_plot(), 
+       width = 8,
+       height = 6)
 ```
-Features to Keep:
-- Time on site
-- Page views
-- 
-Remove:
-- Traffic Source
- - 'analytics.google.com'
-- 
-- 'Vietnam'
-With these results, I might try to apply this model to a linear
-regression plot. With revenue for guessed purchase compared to revenue
-for assumed not purchase.
+
+Features to Keep: - Time on site - Page views - Remove: - Traffic
+Source - 'analytics.google.com' - - 'Vietnam' With these results, I
+might try to apply this model to a linear regression plot. With revenue
+for guessed purchase compared to revenue for assumed not purchase.
 
 High TN Results: - Reduced marketing spend if targeting ideal potential
 buyers. - only focus on visitors more likely to purchase - can exclude
@@ -275,21 +328,27 @@ bounce_reg <- logistic_regression(
   theta = 0.5
 )
 
-#tidy(bounce_reg)
+
 ```
-- This model 
+
+-   This model
 
 ```{r}
 bounce_model <- bounce_reg[[1]]
 ggstats::ggcoef_model(bounce_model,
-                       exponentiate = TRUE) +
-  theme_classic(base_size = 5) 
+                       exponentiate = TRUE,
+                      conf.int=TRUE) +
+  theme_classic(base_size = 6) +
+  labs(
+    title = "Coeficient Plot for Odds of Purchase Logistic Regression"
+  )
+
+ggsave("bounce_model_plot.png",
+       plot = last_plot(), 
+       width = 8,
+       height = 6)
 ```
 
 ```{r}
-
+google_store$bounces %>% table()
 ```
-
-
-
-

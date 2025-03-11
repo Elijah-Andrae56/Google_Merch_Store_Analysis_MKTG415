@@ -1,0 +1,140 @@
+---
+title: "Querying Data"
+output: html_document
+---
+# 1. Query Main Data
+```{r}
+library(tidyverse)
+library(bigrquery)
+```
+
+```{r}
+bq_projects
+project_id <- "weighty-nation-450808-j5"
+
+query <- "
+SELECT
+  fullVisitorId,  -- Unique visitor ID
+  visitId,        -- Unique session ID
+  _TABLE_SUFFIX AS table_date,  -- Extracts the date from the table name
+  date,          -- Session date
+  trafficSource.source AS traffic_source,  -- Where traffic came from
+  trafficSource.medium AS traffic_medium,  -- Medium (organic, cpc, referral, etc.)
+  trafficSource.campaign AS campaign_name, -- Campaign name (if applicable)
+  device.deviceCategory AS device_category,  -- Desktop, mobile, tablet
+  device.operatingSystem AS operating_system, 
+  device.browser AS browser,
+  totals.pageviews AS total_pageviews,  -- Number of pages viewed
+  totals.timeOnSite AS total_time_on_site,  -- Time spent on site
+  totals.bounces AS bounces,  -- Bounce count (1 = bounced)
+  totals.transactions AS transactions,  -- Number of purchases made
+  totals.totalTransactionRevenue / 1e6 AS revenue,  -- Revenue (converted to dollars)
+  totals.sessionQualityDim AS session_quality,  -- Engagement score
+  geoNetwork.country AS user_country  -- User’s country
+FROM `bigquery-public-data.google_analytics_sample.ga_sessions_*`
+WHERE totals.pageviews IS NOT NULL  -- Filter out empty sessions
+ORDER BY revenue DESC
+"
+bq_data <- bq_project_query(project_id, query)
+google_store <- bq_table_download(bq_data)
+write.csv(google_store, "../data/google_store.csv", row.names = FALSE)
+```
+
+# 2. Finding Global Holidays
+```{r}
+library(lubridate)
+library(jsonlite)
+library(countrycode)
+library(tidyverse)
+```
+
+```{r}
+date_place <- google_store %>%
+  distinct(date, user_country) %>%
+  mutate(
+    date = ymd(date),
+    country_code = countrycode(
+             user_country, "country.name", "iso2c", warn = FALSE
+           ))
+```
+
+```{r}
+get_holidays <- function(year, country_code) {
+  url <- paste0("https://date.nager.at/api/v3/publicholidays/", year, "/", country_code)
+  
+  # Try fetching the data, handle errors
+  tryCatch({
+    holidays <- fromJSON(url)
+    #print(head(holidays))
+    holidays$date <- ymd(holidays$date)
+    return(holidays$date)
+  }, error = function(e) {
+    #message("Error fetching holidays for ", country_code, " in ", year, ": ", e$message)
+    return(as.Date(character()))  # Return empty date vector on failure
+  })
+}
+
+mark_holidays <- function(df, country_code){
+  holiday_list <- c(get_holidays(2016, country_code), get_holidays(2017, country_code))
+
+  indices <- which(df$country_code == country_code & !is.na(df$date))
+  
+  # Ensure we're not assigning NA values
+  df$is_holiday[indices] <- df$date[indices] %in% holiday_list
+  return(df)
+}
+
+date_place$is_holiday <- FALSE
+for (code in unique(date_place$country_code)){
+  date_place <- mark_holidays(date_place, code)
+}
+```
+
+
+```{r}
+google_store <- left_join(
+  google_store, date_place, by=c("date", "user_country"))
+
+daily_stats <- google_store %>%
+  group_by(date, user_country) %>%
+  summarize(
+    total_sales = sum(purchase),
+    is_holiday = first(is_holiday), # Carry over the is_holiday value
+    .groups = "drop"
+    )
+
+find_days_till_holiday <- function(df, country, current_date) {
+  holiday_dates <- df %>%
+    filter(user_country == country,
+           date >= current_date,
+           is_holiday == TRUE) %>%
+    arrange(date) %>%
+    head(1)
+
+  if (nrow(holiday_dates) > 0) {
+    next_holiday <- holiday_dates$date[1]
+    return(as.numeric(difftime(next_holiday, current_date, units = "days")))
+  } else {
+    return(NA) 
+  }
+}
+
+daily_stats <- daily_stats %>%
+  rowwise() %>%
+  mutate(
+    days_till_holiday = find_days_till_holiday(daily_stats, user_country, date)
+  ) %>%
+  ungroup()
+
+write.csv(daily_stats, "../data/daily_stats.csv", row.names = FALSE)
+```
+
+
+```{r}
+```
+
+
+```{r}
+```
+
+

@@ -12,7 +12,7 @@ library(maps)
 library(stringr)
 library(stringi)
 
-google_store <- read_csv("google_store.csv")
+google_store <- read_csv("data/google_store.csv")
 ```
 
 
@@ -157,6 +157,21 @@ predictions <- predict(model, newdata = new_data)
 predicted_revenue <- 10^predictions
 predicted_revenue
 ```
+
+```{r}
+daily_stats <- google_store %>%
+  group_by(date, user_country) %>%
+  summarize(
+    total_revenue = sum(revenue, na.rm=TRUE),
+    average_revenue = mean(revenue, na.rm = TRUE),
+    bounce_rate = mean(bounces, na.rm = TRUE),
+    total_visits = n(),
+    total_sales = sum(purchase),
+    is_holiday = first(is_holiday), # Carry over the is_holiday value
+    .groups = "drop"
+    )
+```
+
 
 
 
