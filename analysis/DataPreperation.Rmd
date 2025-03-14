@@ -8,6 +8,8 @@ library(tidyverse)
 library(bigrquery)
 ```
 
+
+You do need your own google cloud project ID here. If you downloaded the data folder from the github you can ignore this file.
 ```{r}
 bq_projects
 project_id <- "weighty-nation-450808-j5"
@@ -88,12 +90,22 @@ date_place$is_holiday <- FALSE
 for (code in unique(date_place$country_code)){
   date_place <- mark_holidays(date_place, code)
 }
+date_place$date <- ymd(date_place$date)
+```
+```{r}
+date_place
+google_store
 ```
 
 
 ```{r}
+google_store$date <- ymd(google_store$date)
+
 google_store <- left_join(
   google_store, date_place, by=c("date", "user_country"))
+
+google_store <- google_store %>% 
+  mutate(purchase = is.na(revenue) %>% ifelse(0, 1))
 
 daily_stats <- google_store %>%
   group_by(date, user_country) %>%
@@ -129,12 +141,5 @@ daily_stats <- daily_stats %>%
 write.csv(daily_stats, "../data/daily_stats.csv", row.names = FALSE)
 ```
 
-
-```{r}
-```
-
-
-```{r}
-```
 
 

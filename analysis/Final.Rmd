@@ -1,19 +1,44 @@
 ---
 title: "Logistic Regression Final"
-author: "Eli Andrae, "
-output: html_document
-editor_options: 
-  markdown: 
+author: 'Eli Andrae, Sergio Bacon, Ted McKee'
+output:
+  pdf_document: default
+  html_document: default
+editor_options:
+  markdown:
     wrap: 72
 ---
 
-# 1. Execuative Summary
+# 1. Executive Summary
 
-Write Here:
+Our project focused on an in-depth analysis of the Google Merch Store
+Data, covering over 900,000 entries from August 1, 2016, to August 1,
+2017. Key variables such as traffic source, dates, browser, total
+pageviews, total time on site, bounces, transactions, revenue, user
+country, and purchase count were analyzed to understand consumer
+behavior and enhance the effectiveness of online shopping. We used a
+holiday data set to examine the impact of global holidays on sales.
+Different R libraries were used including dplyr, ggplot2, countrycodes,
+scales, and lubridate, to clean and visualize the data. Our analyses
+included generating bar plots, line plots, and correlation plots to
+answer questions about the highest revenue streams, holiday impacts on
+sales, and bounce rates.
+
+Based on our findings, we concluded that strategic last-minute
+promotions and a focused marketing spending on high-value traffic
+sources are pivotal for driving sales. Additionally, leveraging
+predictive models to optimize targeting can significantly improve
+marketing efficiency. These recommendations are aimed at making Googles
+online shopping more prevalent and contributing to the growth of the
+global economy. By understanding the nuances of consumer behavior
+through rigorous data analysis, we can enhance the overall shopping
+experience and drive sustained growth for the Google Merch Store.
+
+To find more information on the project, including data collection and data pre-preparation you can visit our [GitHub](https://github.com/Elijah-Andrae56/Google_Merch_Store_Analysis_MKTG415)
 
 # 2. Setup
 
-## Load Required Libraries
+## 2.1 Load Required Libraries
 
 ```{r}
 library(tidyverse)
@@ -21,18 +46,22 @@ library(broom)
 library(scales)
 library(lubridate)
 library(ggplot2)
+library(caret)
+library(corrplot)
+library(ggridges)
 ```
 
-## Load Data
+## 2.2 Load Data
 
 ```{r}
 google_store <- read_csv("../data/google_store.csv")
 daily_stats <- read_csv("../data/daily_stats.csv")
 ```
 
-First I will clear the NA values to make the data usable in a Regression
+First we will clear the NA values to make the data usable in a
+Regression
 
-# Data Cleaning & Feature Engineering
+# 3. Data Cleaning & Feature Engineering
 
 -   Cleaning our NA Values and Creating The Purchase Variable
 
@@ -50,15 +79,15 @@ google_store <- google_store %>%
 which(colSums(is.na(google_store)) > 0)
 ```
 
-## Feature Engineering Using Date Functions
+## 3.1 Feature Engineering Using Date Functions
 
 Now we will add some extra features to the data. Due to compute times
 some of these have been excluded from the file and presaved as a CSV
 file. Not every country and holiday is included, however, I tried my
 best to include as many as possible using [date.nager
 API](https://date.nager.at/api/v3/publicholidays/). View
-`HolidayAnalysis.Rmd` for more info on how the holidays were accessed
-and `days_till_holiday` was calculated.\*\*
+`DataPreparation.Rmd` for more info on how the holidays were accessed
+and `days_till_holiday` was calculated.
 
 ```{r}
 # Modification Using Lubridate
@@ -67,36 +96,177 @@ google_store <- google_store %>%
     date = ymd(google_store$date),
     weekday = wday(date, label = TRUE, abbr =  TRUE),
     is_weekend = wday(date) %in% c(1, 7),
-    month = month(date, label = TRUE, abbr = TRUE)
-  )
-
-google_store$month <- factor(google_store$month, 
-                             levels = c("Jan", "Feb", "Mar", "Apr", "May", "Jun", 
-                                        "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"), 
-                             ordered = FALSE)
+    month = month(date, label = TRUE, abbr = TRUE),
+    month = factor(month, 
+                   levels = c("Jan", "Feb", "Mar", "Apr", "May", "Jun", 
+                              "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"), 
+                   ordered = FALSE))
 ```
 
-## Merging Holiday Data and Visior Data
+## 3.2 Merging Holiday Data and Visior Data
 
 ```{r}
 # Joining with a dataset of holidays and days until the next holiday
 google_store <- left_join(
   google_store, 
   daily_stats[,c("date", "user_country", "is_holiday", "days_till_holiday")], 
-  by=c("date", "user_country")
-)
+  by=c("date", "user_country")) 
 
+# Finding the number of previous visits and purchases each visitor has made.
 google_store <- google_store %>%
   group_by(fullVisitorId) %>%
   summarize(
-    previous_visit_count = n(), previous_purchase_count = sum(purchase)
-  ) %>%
+    previous_visit_count = n(), previous_purchase_count = sum(purchase)) %>%
   right_join(google_store, 'fullVisitorId')
 ```
 
-# Finding Optimal Pre-Holiday Marketing Period
+# 4. Dataset Summary Statistics
 
-I'm thinking there might be an optimal period to market before holidays.
+So far the dataset contains 275 different traffic sources and 54 different browsers
+biggest browsers including Chrome, Firefox, Safari, Safari(in app), Edge,
+YaBrowser, IOS, Android
+
+## 4.1 Total Browsers
+
+```{r}
+num_browsers <- google_store %>%
+  summarize(different_browsers = n_distinct(browser))
+print(num_browsers)
+```
+
+## 4.2 Highest Revenue per Browser
+
+```{r}
+browser_revenue <- google_store %>%
+  group_by(browser) %>%
+  summarize(total_revenue = sum(revenue, na.rm = TRUE)) %>%
+  arrange(desc(total_revenue))
+print(browser_revenue %>% head(10))
+
+top_browser <- browser_revenue %>%
+  top_n(1, total_revenue)
+print(top_browser)
+```
+
+## 4.3 Highest Revenues per Browser & Traffic Source
+
+Direct from Chrome and Google search from Chrome were the two highest in both transactions and revenue. As you go lower, there is much less for each transactions and revenue.
+
+```{r}
+result <- google_store %>%
+  group_by(traffic_source, browser) %>%
+  summarize(
+    total_transactions = sum(transactions, na.rm = TRUE),
+    total_revenue = sum(revenue, na.rm = TRUE)
+  ) %>%
+  arrange(desc(total_revenue), desc(total_transactions))
+print(result %>% head(10))
+```
+
+## 4.4 Highest Revenues per Country
+
+Sales in this dataset are overwhelmingly from the United States
+
+```{r}
+country_revenue <- google_store %>%
+  group_by(user_country) %>%
+  summarize(total_revenue = sum(revenue, na.rm = TRUE)) %>%
+  arrange(desc(total_revenue))
+
+top_10_countries <- country_revenue %>%
+  top_n(10, total_revenue)
+
+ggplot(top_10_countries, aes(x = reorder(user_country, -total_revenue), y = total_revenue)) +
+  geom_bar(stat = "identity", fill = "blue") +
+  labs(title = "Top 10 Countries by Total Revenue",
+       x = "Country",
+       y = "Total Revenue") +
+  theme_minimal() +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))
+
+print(top_10_countries)
+```
+
+## 4.5 Largest Transactions
+
+```{r}
+library(dplyr)
+
+top_n_purchases <- google_store %>%
+  arrange(desc(revenue)) %>%
+  slice_head(n = 10)  
+
+print(top_n_purchases[, c("fullVisitorId", "previous_visit_count", "previous_purchase_count", "revenue")])
+
+```
+It appears the same visitor made a large amount of the largest transactions. In the top 10, they appeared 4 times.
+
+# 5 Rigline Monthly Sales
+
+For this section, I wrote out the code, fed it to ChatGPT, and said go crazy with the design of the graph. 
+```{r}
+revenue_group <- google_store %>%
+  group_by(date) %>%
+  summarize(total_revenue = sum(revenue)) %>%
+  mutate(month = month(date, label = TRUE, abbr = FALSE))
+revenue_group
+
+
+# Create ridgeline plot with a custom theme
+ggplot(revenue_group, aes(x = total_revenue, y = month, fill = month)) +
+  geom_density_ridges_gradient(
+    scale = 2,
+    rel_min_height = 0.01,
+    gradient_lwd = 1.0
+  ) +
+  # Format x-axis as currency and remove extra space on the left
+  scale_x_continuous(
+    labels = dollar_format(prefix = "$", suffix = "", largest_with_cents = 1e3),
+    expand = c(0, 0)
+  ) +
+  # Give y some extra space at the bottom, flip the factor order
+  scale_y_discrete(
+    expand = expansion(mult = c(0.01, 0.25)),  # Close expansion() properly
+    limits = rev(levels(revenue_group$month))  # Then set limits
+  ) +
+  # Update labels and add a caption if desired
+  labs(
+    title = "Google Merch Store Daily Revenue",
+    subtitle = "Ridgeline Visualization by Month",
+    x = "Daily Revenue"
+  ) +
+  # Keep ridges theme but tweak fonts/grid
+  theme_ridges(font_size = 13, grid = TRUE) +
+  # Remove y axis title
+  theme(axis.title.y = element_blank()) +
+  # Apply the cividis color scale
+  scale_fill_viridis_d(
+    name = "Month",
+    option = "cividis"
+  )
+
+```
+Observations:
+- Each month has a median somewhere around the $0 - $10,000 range.
+- Some months, like April, June, July, August, November, and December have tails indicating multiple high revenue sales days.
+- February, April, July, August, and September have very high revenue outlier days with April having the highest.
+- Identifies "consistent" months, e.g. January, February, September, and October. vs. "volitile" months. e.g. April, July, August, September, and December. 
+- Appears to be a "Christmas Daily Revenue Boost" in December.
+# 6. Looking at Linear Correlation
+
+```{r}
+corr <- cor(
+  google_store[
+    c("total_pageviews", "total_time_on_site", "transactions", 
+      "revenue", "bounces", "purchase")])
+corrplot(corr, type='lower', diag=FALSE, tl.col = 'black')
+```
+
+  This correlation plot shows a lot of what we would expect to occur between these variables. For example, spending more time on the site strongly correlates to an increased number of pages viewed on the site. What is interesting about this correlation plot is the weak positive correlations between revenue, total pageviews, time spent on site, and transactions. Most people would assume that spending more time on the site and purchasing more items means that you are spending more money but that is not the case as shown by the weak correlations. This means that there is a significant group of shoppers who come to the site knowing exactly what they want and purchasing it quickly. It also means that people often buy a few very expensive items as opposed to a large number of cheaper items. 
+
+# 7. Finding Optimal Pre-Holiday Marketing Period
+
+We believe there may be an optimal period to market before holidays. To find out, we're going to calculate the total number of sales grouped by each number of days_till_holiday. This should give us an idea of the most effective time to market pre-holiday
 
 ```{r}
 holiday_group <- daily_stats %>%
@@ -105,7 +275,7 @@ holiday_group <- daily_stats %>%
   arrange(desc(total_sales_before_holiday)) %>%
   na.omit()
 
-arrange(holiday_group, desc(total_sales_before_holiday))
+arrange(holiday_group, desc(total_sales_before_holiday)) %>% head(5)
 ```
 
 The most common days to place an order before a holiday are 7, 6, and 4
@@ -113,7 +283,9 @@ days. It is useful to market much closer to a holiday then I may have
 expected.
 
 ```{r}
-holiday_plot <- ggplot(holiday_group, aes(x=days_till_holiday, y=total_sales_before_holiday)) +
+holiday_plot <- ggplot(
+  holiday_group, aes(x=days_till_holiday, y=total_sales_before_holiday)
+) +
   geom_line() +
   scale_x_reverse(limits = c(70, 0)) +
   scale_y_continuous(limits = c(0, 600)) +
@@ -127,29 +299,23 @@ holiday_plot
 ```
 
 -   Just as I suspected, as it gets closer to a holiday, sales go up
-    around the world.
+    around the world wi
 -   In order to handle this in the logistic regression model, we
-    attempted an inverse transformation but yeilded minimal results. We
+    attempted an inverse transformation on days but that yielded minimal results. Instead we
     found the more effective method for the model was to find total
     country sales for each number of days before the holiday. The number
     of sales for that day can then be used as a weight in the logistic
     regression model.
 
+Here I will add the days number of sales to each days till holiday
 ```{r}
 google_store <- google_store %>%
   left_join(holiday_group, "days_till_holiday") 
-google_store
 ```
 
-# Looking at Linear Correlation
+# 8. Logestic Regression
 
-```{r}
-summary(google_store)
-```
-
-# Defining Logestic Regression model
-
--   In this section I will build a logistic regression model build for
+-   In this section we will build a logistic regression model build for
     our data set to determine likelihood of a bounce pre visiting, and
     likelihood of a purchase of a user on the site. As a marketer, this
     allows us to determine if it is worthwhile advertising to a user,
@@ -157,7 +323,10 @@ summary(google_store)
     the site, and purchase likelihood allows us to start preparing for
     an order before it's made, and decide if it's worthwhile to send a
     follow up message if the order is not placed but the user is likely
-    to (TP). Or if the user is not worthwhile advertising to in general.
+    to high (TP), or if the user is not worthwhile advertising to in
+    general high (TN).
+
+## 8.1 Defining Model
 
 ```{r}
 logistic_regression <- function(
@@ -168,6 +337,7 @@ logistic_regression <- function(
     categorical_features, 
     theta = 0.5){
   
+  # Hardcoding this out to make my life simpeler
   df <- df %>% 
     filter(traffic_source != "analytics.google.com")
   
@@ -202,9 +372,12 @@ logistic_regression <- function(
   
   message("Splitting Dataset")
   # Split the dataset into test-train sets
-  train_indices <- caret::createDataPartition(df[[response_var]], p = 0.8, list = FALSE)
+  train_indices <- createDataPartition(
+    df[[response_var]], p = 0.8, list = FALSE
+  )
   
-  use_columns <- c(numeric_features, categorical_features, response_var) %>% na.omit()
+  use_columns <- c(numeric_features, categorical_features, response_var) %>% 
+    na.omit()
   
   log_reg_train <- df[train_indices, use_columns]
   log_reg_test <- df[-train_indices, use_columns]
@@ -251,18 +424,17 @@ logistic_regression <- function(
 }
 ```
 
+## 8.2 Purchase Prediction
+
 ```{r}
 categorical_features <- c(
   "traffic_source", "traffic_medium", 
-  "operating_system", "browser", "user_country")
+  "operating_system", "browser")
 
 numeric_features <- c(
   "total_time_on_site", "total_pageviews", "previous_visit_count", 
   "previous_purchase_count", "total_sales_before_holiday")
 
-
-feature_1 <- 
-filter_features <- 
 
 purchase_reg <- logistic_regression(
   df = google_store,
@@ -272,8 +444,6 @@ purchase_reg <- logistic_regression(
   categorical_features = categorical_features,
   theta = 0.05 # Eyeballed optimal theta
 )
-
-
 ```
 
 Purchase Model Results: - Ended up with extremely high accuracy and TN
@@ -286,30 +456,41 @@ Did not have time to improve upon.
 
 purchase_model <- purchase_reg[[1]]
 
-purchase_plot <- ggstats::ggcoef_model(purchase_model,
-                      exponentiate = TRUE)+
+purchase_plot <- ggstats::ggcoef_model(
+  purchase_model, exponentiate = TRUE, conf.int = FALSE
+) +
   theme_classic(base_size = 6) + 
   scale_x_continuous(
-    labels = scales::number_format(accuracy = 1)
-) +
-  labs(
-    title = "Coeficient Plot for Odds of Purchase Logistic Regression")
+    labels = scales::number_format(accuracy = 1)) +
+  labs(title = "Coeficient Plot for Odds of Purchase Logistic Regression")
+purchase_plot
 
-ggsave("purchase_model_plot.png",
-       plot = last_plot(), 
-       width = 8,
-       height = 6)
+# ggsave("../images/purchase_model_plot.png",
+#        plot = last_plot(),
+#        width = 8,
+#        height = 6)
 ```
 
-Features to Keep: - Time on site - Page views - Remove: - Traffic
-Source - 'analytics.google.com' - - 'Vietnam' With these results, I
-might try to apply this model to a linear regression plot. With revenue
-for guessed purchase compared to revenue for assumed not purchase.
+Observations:
+
+-   Time_on_site: Positive purchase odds
+-   Pageviews: Very positive Previous
+-   visit count: Lowers
+-   Previous purchase count: Greatly increases odds (NOTE: Didn’t
+    account for current visit purchase.)
+-   Sales before holiday: Increases offs of purchase Traffic source:
+    Direct and google search work best
+-   Traffic Medium: Cost-Per-Click (Googles targeted ad system) does
+    better then natural traffic. Proves current marketing is effective.
+-   OS: Supprisingly Mac and Linux have the highest purchase rates.
+    Browser: Firefox and safari decrease purchase odds.
+
+## 8.3 Bounce Prediction
 
 High TN Results: - Reduced marketing spend if targeting ideal potential
-buyers. - only focus on visitors more likely to purchase - can exclude
-non-buyers from campaigns or personalized offers - Fraud or Bot
-Detection. - If bot detection is an issue this can eliminate false
+buyers. - Don't spend money on visitors unlikely to make a purchase. -
+can exclude non-buyers from campaigns or personalized offers - Fraud or
+Bot Detection. - If bot detection is an issue this can eliminate false
 positives and reduce revenue loss for sales that won't go through.
 
 ```{r}
@@ -319,10 +500,11 @@ categorical_features <- c(
 numeric_features <- c("total_sales_before_holiday", 
                       "previous_visit_count", "previous_purchase_count")
 
+
 bounce_reg <- logistic_regression(
   df = google_store,
   response_var = "bounces",
-  factor_limit = 5,
+  factor_limit = 6,
   categorical_features = categorical_features,
   numeric_features = numeric_features,
   theta = 0.5
@@ -331,24 +513,38 @@ bounce_reg <- logistic_regression(
 
 ```
 
--   This model
+-   This model does much worse, however, the statistically significant
+    coefficients can be useful for further marketing.
 
 ```{r}
 bounce_model <- bounce_reg[[1]]
 ggstats::ggcoef_model(bounce_model,
                        exponentiate = TRUE,
-                      conf.int=TRUE) +
+                      conf.int=FALSE) +
   theme_classic(base_size = 6) +
   labs(
     title = "Coeficient Plot for Odds of Purchase Logistic Regression"
   )
 
-ggsave("bounce_model_plot.png",
-       plot = last_plot(), 
-       width = 8,
-       height = 6)
+# ggsave("../images/bounce_model_plot.png",
+#        plot = last_plot(), 
+#        width = 8,
+#        height = 6)
 ```
 
-```{r}
-google_store$bounces %>% table()
-```
+-   Bounces are when you visit the site and click off at the home page
+-   Lower bounce rates are better as customers see more of the product
+-   Right around 50% bounce rate in dataset
+-   Holiday sales variable decreases bounce odds
+-   Lots of visits increases bounce likelihood. Might be worthwhile to
+    find ways to offer sales to high visit rate customers to incentivize
+    clicks further into website
+-   Traffic_source: natural traffic from search have lowest bounce
+    rates. Partners (paid advertisers) and Youtube are much less likely
+    to interact with site. (Youtube affaliate links/advertisement may
+    not be as worthwhile.)
+-   More niche browsers are more likely to bounce. Edge may have
+    slightly lower bounce rate (further tesing needed)
+-   Top 5 sales months are right around phone launches. (Doesn’t sell
+    phones on this site) I suggest phone hype drives merch sales. All
+    lower bounce rates
