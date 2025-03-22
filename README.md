@@ -70,8 +70,8 @@ Key visualizations included:
 Clone or download the repository to explore the detailed analysis, models, visualizations, and R Markdown documents.
 
 ```bash
-git clone <repository_link>
-cd <repository_directory>
+git clone https://github.com/Elijah-Andrae56/Google_Merch_Store_Analysis_MKTG415.git
+cd Google_Merch_Store_Analysis_MKTG415
 ```
 
 Review the `.Rmd` files for detailed explanations, code snippets, and visualizations to better understand the analysis process and outcomes.
