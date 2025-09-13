@@ -1,82 +1,71 @@
-# Google Merch Store Analysis Project
+# Google Merchandise Store Analysis — Drivers of Conversion & Bounce
 
-## Overview
-This project provides an exploratory data analysis, insightful visualizations, and predictive modeling of the Google Merchandise Store sales data. The data set includes over 900,000 entries spanning the period from August 1, 2016, to August 1, 2017, providing detailed insights into customer behavior, revenue streams, and the impact of holidays on sales.
+**Objective.** Analyze Google Merchandise Store (GMS) web sessions to (1) quantify holiday effects on conversion, and (2) build reliable classifiers for **purchase** and **bounce** under class imbalance.
 
-## Project Contributors
-- Eli Andrae
-- Sergio Bacon
-- Ted McKee
+**Data.** Public **Google Analytics Sample (GMS)** tables in BigQuery (legacy UA). Analysis window: **2016-08-01 to 2017-06-30** across daily `ga_sessions_*` tables.  
+*Note:* Sample data is anonymized/obfuscated by Google for privacy; results approximate the real store.
 
-## Data Source
-The Google Merchandise Store dataset was selected for its comprehensive coverage and relevance in reflecting typical online consumer behavior patterns. The data was enriched with a global holiday data set for comparative analysis of sales performance.
+**Reproducible Environment.**
+- R project pinned with `{renv}` (R packages recorded in `renv.lock`).
+- Optional pipeline with `{targets}` for end-to-end rebuilds.
 
-## Libraries & Tools
-- R programming environment
-- Tidyverse
-- GGplot2
-- Broom
-- Caret
-- Lubridate
-- Bigquery
-- rlang
-- Dplyr
-- GGstats
-- Corrplot
-- Countrycodes
-- Scales
-- Jsonlite
+**How to Run (quick start)**
+```r
+# from R console in the project root
+install.packages("renv")      # one time
+renv::restore()               # reproduces the package environment
+# If using {targets}:
+install.packages("targets")   # one time
+targets::tar_make()           # builds data → features → models → report
+(If applicable) BigQuery extract used for raw sessions (example)
 
-## Visualizations
-Key visualizations included:
-- Bar charts (`geom_bar`) depicting browser revenue streams
-- Line graphs (`geom_line`) demonstrating holiday impact on sales
-- Correlation plots (`cor()` and `corrplot`) showcasing relationships between variables
-- Model plots (`modelplot`) to illustrate logistic regression findings
+sql
+Copy code
+-- Replace with your exact query if different
+SELECT
+  fullVisitorId, visitId, visitNumber, visitStartTime,
+  device.*, geoNetwork.*, trafficSource.*, totals.*, hits.*
+FROM `bigquery-public-data.google_analytics_sample.ga_sessions_*`
+WHERE _TABLE_SUFFIX BETWEEN '20160801' AND '20170630';
+Modeling & Evaluation
 
-## Analysis Highlights
-- **Revenue Streams**: Chrome browser and direct traffic sources generated the highest revenue, notably:
-  - Direct (Chrome): $1,262,755
-  - Google (Chrome): $236,031
+Split by visitor (not by session) to avoid leakage across train/test.
 
-- **Geographic Insights**:
-  - Highest revenue countries: United States, Venezuela, Canada
+Purchase model: regularized logistic regression (elastic net glmnet).
 
-- **Holiday Sales Impact**:
-  - Significant increase in sales observed 4-21 days before holidays
-  - Recommended marketing strategy: targeted promotions and expedited shipping within a week before major holidays
+Report ROC AUC and PR AUC (class imbalance aware), plus a confusion matrix at a stated threshold (chosen on validation by F1 or Youden’s J). Avoid accuracy as a headline metric.
 
-## Predictive Modeling
-- **Purchase Prediction Model**:
-  - Achieved 98% accuracy with high specificity
-  - Useful for targeting likely buyers and optimizing marketing spend
+Provide a calibration plot and baseline comparisons (e.g., predict-all-negative).
 
-- **Bounce Prediction Model**:
-  - Achieved 63% accuracy
-  - Provided useful insights despite challenges in prediction accuracy
+Key Results (fill these in with your numbers)
 
-## Recommendations
-- Prioritize last-minute promotions to leverage holiday sales peaks.
-- Focus marketing budget on proven high-value channels and browser sources.
-- Utilize predictive models to refine targeting strategies and reduce unnecessary marketing expenditures.
+Purchase model: ROC AUC = ..., PR AUC = ..., threshold = ..., F1 = ....
 
-## Files in Repository
-- `DataPreparation.Rmd`: Details on data cleaning and preparation.
-- `PrelimProject.Rmd`: Initial exploratory analysis and insights.
-- `Final.Rmd`: Comprehensive final analysis with detailed findings and visualizations.
-- `Google Store Presentation.pptx`: Presentation summarizing findings and recommendations.
+Bounce model (if included): ROC AUC = ..., PR AUC = ....
 
-## Usage
-Clone or download the repository to explore the detailed analysis, models, visualizations, and R Markdown documents.
+Holiday effect: uplift window around ... days before ... with ... (method: distributed-lag / event-study).
 
-```bash
-git clone https://github.com/Elijah-Andrae56/Google_Merch_Store_Analysis_MKTG415.git
-cd Google_Merch_Store_Analysis_MKTG415
-```
+Repository Structure
 
-Review the `.Rmd` files for detailed explanations, code snippets, and visualizations to better understand the analysis process and outcomes.
+bash
+Copy code
+.
+├─ analysis/           # Rmd/Quarto notebooks (EDA, holiday, modeling)
+├─ R/                  # R functions (feature engineering, metrics, modeling)
+├─ data/
+│  ├─ raw/             # source extracts (ignored by git)
+│  └─ processed/       # derived datasets
+├─ models/             # saved model objects
+├─ reports/            # final report(s), figures
+├─ renv.lock
+├─ _targets.R          # (optional) pipeline entrypoint
+└─ .github/workflows/  # (optional) CI config
+Caveats
 
----
+GMS sample ≠ production GA data; conclusions are illustrative.
 
-This analysis project effectively demonstrates actionable insights and robust predictive modeling strategies applicable to online retail environments, emphasizing strategic marketing optimization and enhanced consumer engagement.
+No PII; channel/device bias and seasonality may remain.
 
+Citation & License
+
+See CITATION.cff and LICENSE in the repository root.
