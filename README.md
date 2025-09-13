@@ -1,6 +1,4 @@
-Here’s a clean, consistently structured version of your markdown.
 
-````markdown
 # Google Merchandise Store Analysis — Drivers of Conversion & Bounce
 
 ## Objective
