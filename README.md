@@ -1,4 +1,4 @@
-
+**Currently Not Up To Date. Plan to transform class project into case study**
 # Google Merchandise Store Analysis — Drivers of Conversion & Bounce
 
 ## Objective
