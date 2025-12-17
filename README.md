@@ -1,91 +1,83 @@
-**Currently Not Up To Date. Plan to transform class project into case study**
-# Google Merchandise Store Analysis — Drivers of Conversion & Bounce
+# Google Merch Store Analysis Project
 
-## Objective
-Analyze Google Merchandise Store (GMS) web sessions to:
-1) quantify holiday effects on conversion, and  
-2) build reliable classifiers for **purchase** and **bounce** under class imbalance.
+## Overview
+This project provides an exploratory data analysis, insightful visualizations, and predictive modeling of the Google Merchandise Store sales data. The data set includes over 900,000 entries spanning the period from August 1, 2016, to August 1, 2017, providing detailed insights into customer behavior, revenue streams, and the impact of holidays on sales.
 
-## Data
-Public **Google Analytics Sample (GMS)** tables in BigQuery (legacy UA).  
-Analysis window: **2016-08-01 to 2017-06-30** across daily `ga_sessions_*` tables.  
-*Note:* Sample data is anonymized/obfuscated by Google for privacy; results approximate the real store.
+## Project Contributors
+- Eli Andrae
+- Sergio Bacon
+- Ted McKee
 
-## Reproducible Environment
-- R project pinned with `{renv}` (R packages recorded in `renv.lock`).
-- Optional pipeline with `{targets}` for end-to-end rebuilds.
+## Data Source
+The Google Merchandise Store dataset was selected for its comprehensive coverage and relevance in reflecting typical online consumer behavior patterns. The data was enriched with a global holiday data set for comparative analysis of sales performance.
 
-## How to Run (Quick Start)
+## Libraries & Tools
+- R programming environment
+- Tidyverse
+- GGplot2
+- Broom
+- Caret
+- Lubridate
+- Bigquery
+- rlang
+- Dplyr
+- GGstats
+- Corrplot
+- Countrycodes
+- Scales
+- Jsonlite
 
-```r
-# from R console in the project root
-install.packages("renv")      # one time
-renv::restore()               # reproduces the package environment
+## Visualizations
+Key visualizations included:
+- Bar charts (`geom_bar`) depicting browser revenue streams
+- Line graphs (`geom_line`) demonstrating holiday impact on sales
+- Correlation plots (`cor()` and `corrplot`) showcasing relationships between variables
+- Model plots (`modelplot`) to illustrate logistic regression findings
 
-# If using {targets}:
-install.packages("targets")   # one time
-targets::tar_make()           # builds data → features → models → report
-````
+## Analysis Highlights
+- **Revenue Streams**: Chrome browser and direct traffic sources generated the highest revenue, notably:
+  - Direct (Chrome): $1,262,755
+  - Google (Chrome): $236,031
 
-**(If applicable) BigQuery extract used for raw sessions (example):**
+- **Geographic Insights**:
+  - Highest revenue countries: United States, Venezuela, Canada
 
-```sql
--- Replace with your exact query if different
-SELECT
-  fullVisitorId, visitId, visitNumber, visitStartTime,
-  device.*, geoNetwork.*, trafficSource.*, totals.*, hits.*
-FROM `bigquery-public-data.google_analytics_sample.ga_sessions_*`
-WHERE _TABLE_SUFFIX BETWEEN '20160801' AND '20170630';
+- **Holiday Sales Impact**:
+  - Significant increase in sales observed 4-21 days before holidays
+  - Recommended marketing strategy: targeted promotions and expedited shipping within a week before major holidays
+
+## Predictive Modeling
+- **Purchase Prediction Model**:
+  - Achieved 98% accuracy with high specificity
+  - Useful for targeting likely buyers and optimizing marketing spend
+
+- **Bounce Prediction Model**:
+  - Achieved 63% accuracy
+  - Provided useful insights despite challenges in prediction accuracy
+
+## Recommendations
+- Prioritize last-minute promotions to leverage holiday sales peaks.
+- Focus marketing budget on proven high-value channels and browser sources.
+- Utilize predictive models to refine targeting strategies and reduce unnecessary marketing expenditures.
+
+## Files in Repository
+- `DataPreparation.Rmd`: Details on data cleaning and preparation.
+- `PrelimProject.Rmd`: Initial exploratory analysis and insights.
+- `Final.Rmd`: Comprehensive final analysis with detailed findings and visualizations.
+- `Google Store Presentation.pptx`: Presentation summarizing findings and recommendations.
+
+## Usage
+Clone or download the repository to explore the detailed analysis, models, visualizations, and R Markdown documents.
+
+```bash
+git clone <repository_link>
+cd <repository_directory>
+git clone https://github.com/Elijah-Andrae56/Google_Merch_Store_Analysis_MKTG415.git
+cd Google_Merch_Store_Analysis_MKTG415
 ```
 
-## Modeling & Evaluation
+Review the `.Rmd` files for detailed explanations, code snippets, and visualizations to better understand the analysis process and outcomes.
 
-* **Train/test split**
+---
 
-  * Split **by visitor** (not by session) to avoid leakage across train/test.
-
-* **Model(s)**
-
-  * Purchase: regularized logistic regression (elastic net via `glmnet`).
-  * Bounce (optional): same family for comparability.
-
-* **Metrics & reporting**
-
-  * Report **ROC AUC** and **PR AUC** (class-imbalance aware).
-  * Provide a confusion matrix at a stated threshold (chosen on validation by **F1** or **Youden’s J**).
-  * Avoid using **accuracy** as a headline metric.
-  * Include a **calibration plot** and **baseline comparisons** (e.g., predict-all-negative).
-
-## Key Results *(fill in with your numbers)*
-
-* **Purchase model:** ROC AUC = ..., PR AUC = ..., threshold = ..., F1 = ....
-* **Bounce model (if included):** ROC AUC = ..., PR AUC = ....
-* **Holiday effect:** uplift window around ... days before ... with ... (method: distributed-lag / event-study).
-
-## Repository Structure
-
-```text
-.
-├─ analysis/           # Rmd/Quarto notebooks (EDA, holiday, modeling)
-├─ R/                  # R functions (feature engineering, metrics, modeling)
-├─ data/
-│  ├─ raw/             # source extracts (ignored by git)
-│  └─ processed/       # derived datasets
-├─ models/             # saved model objects
-├─ reports/            # final report(s), figures
-├─ renv.lock
-├─ _targets.R          # (optional) pipeline entrypoint
-└─ .github/workflows/  # (optional) CI config
-```
-
-## Caveats
-
-* GMS sample ≠ production GA data; conclusions are illustrative.
-* No PII; channel/device bias and seasonality may remain.
-
-## Citation & License
-
-See `CITATION.cff` and `LICENSE` in the repository root.
-
-```
-```
+This analysis project effectively demonstrates actionable insights and robust predictive modeling strategies applicable to online retail environments, emphasizing strategic marketing optimization and enhanced consumer engagement.
